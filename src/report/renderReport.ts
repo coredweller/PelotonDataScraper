@@ -29,6 +29,9 @@ function renderRide(ride: FavoriteWithLastDone, position: number, now: Date): st
   const title = escapeHtml(ride.title ?? "Untitled ride");
   const instructor = ride.instructor_name ? escapeHtml(ride.instructor_name) : "—";
   const neverClass = ride.last_done === null ? " item--never" : "";
+  const button = ride.join_token
+    ? `<button class="stack-btn" data-join-token="${escapeHtml(ride.join_token)}" data-title="${title}">+ Stack</button>`
+    : `<button class="stack-btn" disabled title="No on-demand class token available">—</button>`;
 
   return `
         <li class="item${neverClass}">
@@ -38,6 +41,7 @@ function renderRide(ride: FavoriteWithLastDone, position: number, now: Date): st
             <span class="ride-instructor">${instructor}</span>
           </span>
           <span class="last-done">${renderLastDone(ride.last_done, now)}</span>
+          ${button}
         </li>`;
 }
 
@@ -139,12 +143,29 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     ol.rides { list-style: none; margin: 0; padding: 0; counter-reset: none; }
     .item {
       display: grid;
-      grid-template-columns: 1.75rem 1fr auto;
+      grid-template-columns: 1.75rem 1fr auto auto;
       align-items: center;
       gap: 0.6rem;
       padding: 0.55rem 0.4rem;
       border-radius: 8px;
     }
+    .stack-btn {
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      color: var(--accent);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.6rem;
+      transition: background 0.12s, color 0.12s;
+    }
+    .stack-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .stack-btn:disabled { color: var(--muted); cursor: default; opacity: 0.55; }
+    .stack-btn.stacked { color: #1a7f37; border-color: #1a7f3755; background: #1a7f3714; cursor: default; }
+    .stack-btn.failed { color: #b3261e; border-color: #b3261e55; }
     .item:nth-child(even) { background: var(--row-alt); }
     .item--never { background: var(--never-bg); }
     .rank { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.85rem; }
@@ -165,10 +186,57 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
 <body>
   <header>
     <h1>Rides to Do Next</h1>
-    <p class="subtitle">Favorite cycling rides, least-recently-done first · generated ${escapeHtml(generatedLabel)}</p>
+    <p class="subtitle">Favorite cycling rides, least-recently-done first · generated ${escapeHtml(generatedLabel)}<span id="stack-status"></span></p>
   </header>
   <main class="grid">${sections}
   </main>
+  <script>
+    (function () {
+      var live = location.protocol === "http:" || location.protocol === "https:";
+      var status = document.getElementById("stack-status");
+      var buttons = document.querySelectorAll(".stack-btn[data-join-token]");
+
+      if (!live) {
+        // Static file opened directly — the API isn't reachable, so make that clear.
+        buttons.forEach(function (b) {
+          b.disabled = true;
+          b.title = "Run 'npm run serve' and open the served page to stack rides";
+        });
+        if (status) status.textContent = " · open via 'npm run serve' to stack rides";
+        return;
+      }
+
+      function showCount(n) {
+        if (status && typeof n === "number") status.textContent = " · your stack: " + n + " class" + (n === 1 ? "" : "es");
+      }
+
+      fetch("/api/stack").then(function (r) { return r.json(); }).then(function (d) { showCount(d.numClasses); }).catch(function () {});
+
+      document.addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest(".stack-btn[data-join-token]");
+        if (!btn || btn.disabled || btn.classList.contains("stacked")) return;
+        var original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Adding…";
+        fetch("/api/stack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ joinToken: btn.dataset.joinToken })
+        }).then(function (r) {
+          return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "failed"); return d; });
+        }).then(function (d) {
+          btn.textContent = "Stacked ✓";
+          btn.classList.add("stacked");
+          showCount(d.numClasses);
+        }).catch(function (err) {
+          btn.textContent = "Retry";
+          btn.disabled = false;
+          btn.classList.add("failed");
+          btn.title = String(err.message || err);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
 `;

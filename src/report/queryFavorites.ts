@@ -12,6 +12,7 @@ const RANKED_FAVORITES_QUERY = `
     f.title              AS title,
     f.duration_seconds   AS duration_seconds,
     i.name               AS instructor_name,
+    json_extract(f.raw_json, '$.join_tokens.on_demand') AS join_token,
     MAX(w.started_at)    AS last_done
   FROM favorite_rides f
   LEFT JOIN instructors i ON i.id = f.instructor_id

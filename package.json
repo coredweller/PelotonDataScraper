@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "sync": "tsx src/index.ts",
     "report": "tsx src/report/index.ts",
+    "serve": "tsx src/report/server.ts",
     "test": "vitest run"
   },
   "keywords": [],
