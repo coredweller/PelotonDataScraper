@@ -56,10 +56,10 @@ function renderRide(ride: FavoriteWithLastDone, position: number): string {
         </li>`;
 }
 
-/** One selector button per bucket; the first is active by default. */
+/** One selector button per bucket; the first is active by default. Roving tabindex: only the active tab is in the tab order. */
 function renderTab(minutes: BucketMinutes, count: number, active: boolean): string {
   return `
-        <button class="tab${active ? " active" : ""}" role="tab" id="tab-${minutes}" data-bucket="${minutes}" aria-controls="panel-${minutes}" aria-selected="${active}">${minutes} min <span class="count">${count}</span></button>`;
+        <button class="tab${active ? " active" : ""}" role="tab" id="tab-${minutes}" data-bucket="${minutes}" aria-controls="panel-${minutes}" aria-selected="${active}" tabindex="${active ? 0 : -1}">${minutes} min <span class="count">${count}</span></button>`;
 }
 
 /** One bucket's ride list as a tab panel; only the active panel is shown. */
@@ -156,7 +156,6 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     .tab:hover { color: var(--text); }
     .tab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
     .tab.active .count { color: #fff; background: #ffffff2a; border-color: transparent; }
-    main { display: block; }
     .bucket {
       background: var(--card);
       border: 1px solid var(--border);
@@ -235,24 +234,47 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
   </main>
   <script>
     (function () {
-      var tabs = document.querySelectorAll(".tab");
+      var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
       var panels = document.querySelectorAll(".bucket");
-      tabs.forEach(function (tab) {
-        tab.addEventListener("click", function () {
-          var bucket = tab.dataset.bucket;
-          tabs.forEach(function (t) {
-            var on = t.dataset.bucket === bucket;
-            t.classList.toggle("active", on);
-            t.setAttribute("aria-selected", on ? "true" : "false");
-          });
-          panels.forEach(function (p) {
-            var on = p.dataset.bucket === bucket;
-            p.classList.toggle("active", on);
-            if (on) p.removeAttribute("hidden");
-            else p.setAttribute("hidden", "");
-          });
+
+      function select(bucket, focus) {
+        tabs.forEach(function (t) {
+          var on = t.dataset.bucket === bucket;
+          t.classList.toggle("active", on);
+          t.setAttribute("aria-selected", on ? "true" : "false");
+          t.tabIndex = on ? 0 : -1;
+          if (on && focus) t.focus();
+        });
+        panels.forEach(function (p) {
+          var on = p.dataset.bucket === bucket;
+          p.classList.toggle("active", on);
+          if (on) p.removeAttribute("hidden");
+          else p.setAttribute("hidden", "");
+        });
+        // Remember the choice so a reload (npm run serve re-renders each GET) keeps this length.
+        if (history.replaceState) history.replaceState(null, "", "#" + bucket);
+        else location.hash = bucket;
+      }
+
+      tabs.forEach(function (tab, i) {
+        tab.addEventListener("click", function () { select(tab.dataset.bucket); });
+        tab.addEventListener("keydown", function (e) {
+          var next;
+          if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+          else if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+          else if (e.key === "Home") next = 0;
+          else if (e.key === "End") next = tabs.length - 1;
+          else return;
+          e.preventDefault();
+          select(tabs[next].dataset.bucket, true);
         });
       });
+
+      // Restore the previously selected length from the URL hash, if it names a real bucket.
+      var initial = (location.hash || "").replace("#", "");
+      if (initial && tabs.some(function (t) { return t.dataset.bucket === initial; })) {
+        select(initial);
+      }
     })();
   </script>
   <script>
@@ -280,7 +302,6 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
       document.addEventListener("click", function (e) {
         var btn = e.target.closest && e.target.closest(".stack-btn[data-join-token]");
         if (!btn || btn.disabled || btn.classList.contains("stacked")) return;
-        var original = btn.textContent;
         btn.disabled = true;
         btn.textContent = "Adding…";
         fetch("/api/stack", {
