@@ -1,7 +1,5 @@
 import { BUCKET_MINUTES, type BucketMinutes, type FavoriteWithLastDone, type RankedBuckets } from "./rankFavorites.js";
 
-const SECONDS_PER_DAY = 86_400;
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -11,21 +9,34 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Human-readable "last done" cell: an absolute date plus relative age, or a "Never done" badge. */
-function renderLastDone(lastDone: number | null, now: Date): string {
-  if (lastDone === null) {
-    return `<span class="never">Never done</span>`;
-  }
-
-  const date = new Date(lastDone * 1000);
-  const dateLabel = date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-  const daysAgo = Math.floor((now.getTime() / 1000 - lastDone) / SECONDS_PER_DAY);
-  const ageLabel = daysAgo <= 0 ? "today" : daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`;
-
-  return `<span class="date">${escapeHtml(dateLabel)}</span><span class="age">${escapeHtml(ageLabel)}</span>`;
+/** Format a Unix epoch-seconds timestamp as a short absolute date (e.g. "Jul 11, 2022"). */
+function formatDate(epochSeconds: number): string {
+  return new Date(epochSeconds * 1000).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
-function renderRide(ride: FavoriteWithLastDone, position: number, now: Date): string {
+/**
+ * "Last done" cell: the ride's release (air) date on top, and the date you last
+ * completed it — or a "Never done" badge — below. Each value carries a short
+ * label so it's clear which date is which.
+ */
+function renderLastDone(originalAirTime: number | null, lastDone: number | null): string {
+  const dateHtml =
+    originalAirTime === null
+      ? ""
+      : `<span class="date"><span class="dlabel">Released</span>${escapeHtml(formatDate(originalAirTime))}</span>`;
+
+  if (lastDone === null) {
+    return `${dateHtml}<span class="never">Never done</span>`;
+  }
+
+  return `${dateHtml}<span class="age"><span class="dlabel">Last done</span>${escapeHtml(formatDate(lastDone))}</span>`;
+}
+
+function renderRide(ride: FavoriteWithLastDone, position: number): string {
   const title = escapeHtml(ride.title ?? "Untitled ride");
   const instructor = ride.instructor_name ? escapeHtml(ride.instructor_name) : "—";
   const neverClass = ride.last_done === null ? " item--never" : "";
@@ -40,20 +51,26 @@ function renderRide(ride: FavoriteWithLastDone, position: number, now: Date): st
             <span class="ride-title">${title}</span>
             <span class="ride-instructor">${instructor}</span>
           </span>
-          <span class="last-done">${renderLastDone(ride.last_done, now)}</span>
+          <span class="last-done">${renderLastDone(ride.original_air_time, ride.last_done)}</span>
           ${button}
         </li>`;
 }
 
-function renderBucket(minutes: BucketMinutes, rides: FavoriteWithLastDone[], now: Date): string {
+/** One selector button per bucket; the first is active by default. */
+function renderTab(minutes: BucketMinutes, count: number, active: boolean): string {
+  return `
+        <button class="tab${active ? " active" : ""}" role="tab" id="tab-${minutes}" data-bucket="${minutes}" aria-controls="panel-${minutes}" aria-selected="${active}">${minutes} min <span class="count">${count}</span></button>`;
+}
+
+/** One bucket's ride list as a tab panel; only the active panel is shown. */
+function renderBucket(minutes: BucketMinutes, rides: FavoriteWithLastDone[], active: boolean): string {
   const body =
     rides.length === 0
       ? `<li class="empty">No favorite cycling rides at this length.</li>`
-      : rides.map((ride, index) => renderRide(ride, index + 1, now)).join("");
+      : rides.map((ride, index) => renderRide(ride, index + 1)).join("");
 
   return `
-    <section class="bucket">
-      <h2>${minutes} min <span class="count">${rides.length}</span></h2>
+    <section class="bucket" id="panel-${minutes}" role="tabpanel" aria-labelledby="tab-${minutes}" data-bucket="${minutes}"${active ? "" : " hidden"}>
       <ol class="rides">${body}
       </ol>
     </section>`;
@@ -69,7 +86,10 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     dateStyle: "medium",
     timeStyle: "short",
   });
-  const sections = BUCKET_MINUTES.map((minutes) => renderBucket(minutes, buckets[minutes], generatedAt)).join("");
+  const tabs = BUCKET_MINUTES.map((minutes, index) => renderTab(minutes, buckets[minutes].length, index === 0)).join("");
+  const sections = BUCKET_MINUTES.map((minutes, index) =>
+    renderBucket(minutes, buckets[minutes], index === 0),
+  ).join("");
 
   return `<!doctype html>
 <html lang="en">
@@ -112,25 +132,38 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     header { margin: 0 0 1.5rem; }
     h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
     .subtitle { color: var(--muted); margin: 0; font-size: 0.9rem; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      gap: 1.25rem;
-      align-items: start;
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0 0 1.25rem;
     }
+    .tab {
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.4rem 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+    .tab.active .count { color: #fff; background: #ffffff2a; border-color: transparent; }
+    main { display: block; }
     .bucket {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 1rem 1.1rem 1.25rem;
     }
-    .bucket h2 {
-      font-size: 1.05rem;
-      margin: 0 0 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
+    .bucket[hidden] { display: none; }
     .count {
       font-size: 0.75rem;
       font-weight: 600;
@@ -175,6 +208,14 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     .last-done { display: flex; flex-direction: column; text-align: right; white-space: nowrap; }
     .date { font-size: 0.85rem; }
     .age { color: var(--muted); font-size: 0.78rem; }
+    .dlabel {
+      color: var(--muted);
+      font-size: 0.62rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-right: 0.35rem;
+    }
     .never {
       color: var(--accent);
       font-weight: 600;
@@ -188,8 +229,32 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     <h1>Rides to Do Next</h1>
     <p class="subtitle">Favorite cycling rides, least-recently-done first · generated ${escapeHtml(generatedLabel)}<span id="stack-status"></span></p>
   </header>
-  <main class="grid">${sections}
+  <nav class="tabs" role="tablist" aria-label="Class length">${tabs}
+  </nav>
+  <main>${sections}
   </main>
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll(".tab");
+      var panels = document.querySelectorAll(".bucket");
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          var bucket = tab.dataset.bucket;
+          tabs.forEach(function (t) {
+            var on = t.dataset.bucket === bucket;
+            t.classList.toggle("active", on);
+            t.setAttribute("aria-selected", on ? "true" : "false");
+          });
+          panels.forEach(function (p) {
+            var on = p.dataset.bucket === bucket;
+            p.classList.toggle("active", on);
+            if (on) p.removeAttribute("hidden");
+            else p.setAttribute("hidden", "");
+          });
+        });
+      });
+    })();
+  </script>
   <script>
     (function () {
       var live = location.protocol === "http:" || location.protocol === "https:";

@@ -10,6 +10,8 @@ export interface FavoriteWithLastDone {
   duration_seconds: number | null;
   /** Unix epoch seconds of the most recent completion, or null if never done. */
   last_done: number | null;
+  /** Unix epoch seconds the ride was originally released (aired), or null if unknown. */
+  original_air_time: number | null;
   /** The class join token used to add this ride to the Peloton stack, or null if unavailable. */
   join_token: string | null;
 }

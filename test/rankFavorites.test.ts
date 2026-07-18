@@ -7,6 +7,7 @@ function ride(overrides: Partial<FavoriteWithLastDone> & Pick<FavoriteWithLastDo
     instructor_name: null,
     duration_seconds: 1800,
     last_done: null,
+    original_air_time: null,
     join_token: null,
     ...overrides,
   };
