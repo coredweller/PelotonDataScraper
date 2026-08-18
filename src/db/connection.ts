@@ -14,3 +14,16 @@ export function openDatabase(): Database.Database {
 
   return db;
 }
+
+/**
+ * Run a read-only query on its own short-lived connection so report queries
+ * never contend with the sync writer.
+ */
+export function queryReadonly<T>(sql: string): T[] {
+  const db = new Database(config.DB_PATH, { readonly: true });
+  try {
+    return db.prepare(sql).all() as T[];
+  } finally {
+    db.close();
+  }
+}

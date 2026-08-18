@@ -1,60 +1,7 @@
 import { BUCKET_MINUTES, type BucketMinutes, type FavoriteWithLastDone, type RankedBuckets } from "./rankFavorites.js";
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-/** Format a Unix epoch-seconds timestamp as a short absolute date (e.g. "Jul 11, 2022"). */
-function formatDate(epochSeconds: number): string {
-  return new Date(epochSeconds * 1000).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-/**
- * "Last done" cell: the ride's release (air) date on top, and the date you last
- * completed it — or a "Never done" badge — below. Each value carries a short
- * label so it's clear which date is which.
- */
-function renderLastDone(originalAirTime: number | null, lastDone: number | null): string {
-  const dateHtml =
-    originalAirTime === null
-      ? ""
-      : `<span class="date"><span class="dlabel">Released</span>${escapeHtml(formatDate(originalAirTime))}</span>`;
-
-  if (lastDone === null) {
-    return `${dateHtml}<span class="never">Never done</span>`;
-  }
-
-  return `${dateHtml}<span class="age"><span class="dlabel">Last done</span>${escapeHtml(formatDate(lastDone))}</span>`;
-}
-
-function renderRide(ride: FavoriteWithLastDone, position: number): string {
-  const title = escapeHtml(ride.title ?? "Untitled ride");
-  const instructor = ride.instructor_name ? escapeHtml(ride.instructor_name) : "—";
-  const neverClass = ride.last_done === null ? " item--never" : "";
-  const button = ride.join_token
-    ? `<button class="stack-btn" data-join-token="${escapeHtml(ride.join_token)}" data-title="${title}">+ Stack</button>`
-    : `<button class="stack-btn" disabled title="No on-demand class token available">—</button>`;
-
-  return `
-        <li class="item${neverClass}">
-          <span class="rank">${position}</span>
-          <span class="ride">
-            <span class="ride-title">${title}</span>
-            <span class="ride-instructor">${instructor}</span>
-          </span>
-          <span class="last-done">${renderLastDone(ride.original_air_time, ride.last_done)}</span>
-          ${button}
-        </li>`;
-}
+import type { RideRecords } from "./rankRecords.js";
+import { RECORDS_STYLES, renderRecords } from "./renderRecords.js";
+import { escapeHtml, renderRide } from "./rideRow.js";
 
 /** One selector button per bucket; the first is active by default. Roving tabindex: only the active tab is in the tab order. */
 function renderTab(minutes: BucketMinutes, count: number, active: boolean): string {
@@ -70,18 +17,25 @@ function renderBucket(minutes: BucketMinutes, rides: FavoriteWithLastDone[], act
       : rides.map((ride, index) => renderRide(ride, index + 1)).join("");
 
   return `
-    <section class="bucket" id="panel-${minutes}" role="tabpanel" aria-labelledby="tab-${minutes}" data-bucket="${minutes}"${active ? "" : " hidden"}>
-      <ol class="rides">${body}
-      </ol>
-    </section>`;
+      <section class="card bucket" id="panel-${minutes}" role="tabpanel" aria-labelledby="tab-${minutes}" data-bucket="${minutes}"${active ? "" : " hidden"}>
+        <ol class="rides">${body}
+        </ol>
+      </section>`;
+}
+
+/** One of the two top-level views; "Rides to Do Next" is active by default. */
+function renderViewTab(view: string, labelText: string, active: boolean): string {
+  return `
+      <button class="view-tab${active ? " active" : ""}" role="tab" id="view-tab-${view}" data-view="${view}" aria-controls="view-${view}" aria-selected="${active}" tabindex="${active ? 0 : -1}">${labelText}</button>`;
 }
 
 /**
- * Render the four ranked buckets into a single self-contained, theme-aware HTML
- * document (all CSS inline, no external assets). Each list is ordered so the
- * ride to do next — never done, or done furthest in the past — is at the top.
+ * Render both views into a single self-contained, theme-aware HTML document
+ * (all CSS inline, no external assets): "Rides to Do Next", where each length's
+ * list puts the ride to do next at the top, and "Records", which ranks
+ * completed rides by output.
  */
-export function renderReport(buckets: RankedBuckets, generatedAt: Date): string {
+export function renderReport(buckets: RankedBuckets, records: RideRecords, generatedAt: Date): string {
   const generatedLabel = generatedAt.toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -96,7 +50,7 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Peloton — Rides to Do Next</title>
+  <title>Peloton — Rides &amp; Records</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -129,9 +83,34 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
       color: var(--text);
       font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    header { margin: 0 0 1.5rem; }
+    header { margin: 0 0 1.25rem; }
     h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
     .subtitle { color: var(--muted); margin: 0; font-size: 0.9rem; }
+    .views {
+      display: inline-flex;
+      gap: 0.25rem;
+      margin: 0 0 1.25rem;
+      padding: 0.25rem;
+      background: var(--row-alt);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+    }
+    .view-tab {
+      font: inherit;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      transition: background 0.12s, color 0.12s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active { color: #fff; background: var(--accent); }
+    .view[hidden] { display: none; }
+    .view-note { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.9rem; }
     .tabs {
       display: flex;
       flex-wrap: wrap;
@@ -156,7 +135,7 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
     .tab:hover { color: var(--text); }
     .tab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
     .tab.active .count { color: #fff; background: #ffffff2a; border-color: transparent; }
-    .bucket {
+    .card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
@@ -220,61 +199,103 @@ export function renderReport(buckets: RankedBuckets, generatedAt: Date): string 
       font-weight: 600;
       font-size: 0.82rem;
     }
-    .empty { color: var(--muted); font-size: 0.88rem; padding: 0.5rem 0.4rem; list-style: none; }
+    .empty { color: var(--muted); font-size: 0.88rem; padding: 0.5rem 0.4rem; list-style: none; }${RECORDS_STYLES}
   </style>
 </head>
 <body>
   <header>
-    <h1>Rides to Do Next</h1>
-    <p class="subtitle">Favorite cycling rides, least-recently-done first · generated ${escapeHtml(generatedLabel)}<span id="stack-status"></span></p>
+    <h1>Peloton</h1>
+    <p class="subtitle">Synced favorites and ride history · generated ${escapeHtml(generatedLabel)}<span id="stack-status"></span></p>
   </header>
-  <nav class="tabs" role="tablist" aria-label="Class length">${tabs}
+  <nav class="views" role="tablist" aria-label="View">${renderViewTab("next", "Rides to Do Next", true)}${renderViewTab("records", "Records", false)}
   </nav>
-  <main>${sections}
+  <main>
+    <section class="view" id="view-next" role="tabpanel" aria-labelledby="view-tab-next" data-view="next">
+      <p class="view-note">Favorite cycling rides, least-recently-done first.</p>
+      <nav class="tabs" role="tablist" aria-label="Class length">${tabs}
+      </nav>${sections}
+    </section>
+    <section class="view" id="view-records" role="tabpanel" aria-labelledby="view-tab-records" data-view="records" hidden>
+      <p class="view-note">Every completed cycling ride, ranked by total output.</p>${renderRecords(records)}
+    </section>
   </main>
   <script>
     (function () {
+      var viewTabs = Array.prototype.slice.call(document.querySelectorAll(".view-tab"));
+      var views = Array.prototype.slice.call(document.querySelectorAll(".view"));
       var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
-      var panels = document.querySelectorAll(".bucket");
+      var panels = Array.prototype.slice.call(document.querySelectorAll(".bucket"));
+      var currentView = "next";
+      var currentBucket = "${BUCKET_MINUTES[0]}";
 
-      function select(bucket, focus) {
-        tabs.forEach(function (t) {
-          var on = t.dataset.bucket === bucket;
-          t.classList.toggle("active", on);
-          t.setAttribute("aria-selected", on ? "true" : "false");
-          t.tabIndex = on ? 0 : -1;
-          if (on && focus) t.focus();
-        });
-        panels.forEach(function (p) {
-          var on = p.dataset.bucket === bucket;
-          p.classList.toggle("active", on);
-          if (on) p.removeAttribute("hidden");
-          else p.setAttribute("hidden", "");
-        });
-        // Remember the choice so a reload (npm run serve re-renders each GET) keeps this length.
-        if (history.replaceState) history.replaceState(null, "", "#" + bucket);
-        else location.hash = bucket;
+      // Remember both choices so a reload (npm run serve re-renders on each GET) lands back here.
+      function syncHash() {
+        var hash = "#" + (currentView === "records" ? "records" : currentBucket);
+        if (history.replaceState) history.replaceState(null, "", hash);
+        else location.hash = hash;
       }
 
-      tabs.forEach(function (tab, i) {
-        tab.addEventListener("click", function () { select(tab.dataset.bucket); });
-        tab.addEventListener("keydown", function (e) {
-          var next;
-          if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
-          else if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
-          else if (e.key === "Home") next = 0;
-          else if (e.key === "End") next = tabs.length - 1;
-          else return;
-          e.preventDefault();
-          select(tabs[next].dataset.bucket, true);
+      /** Mark the element whose data-[key] matches as active: tabs get ARIA state, panels get shown. */
+      function activate(elements, key, value) {
+        elements.forEach(function (el) {
+          var on = el.dataset[key] === value;
+          el.classList.toggle("active", on);
+          if (el.getAttribute("role") === "tab") {
+            el.setAttribute("aria-selected", on ? "true" : "false");
+            el.tabIndex = on ? 0 : -1;
+          } else if (on) {
+            el.removeAttribute("hidden");
+          } else {
+            el.setAttribute("hidden", "");
+          }
         });
-      });
+      }
 
-      // Restore the previously selected length from the URL hash, if it names a real bucket.
+      function focusActive(elements, key, value) {
+        var active = elements.filter(function (el) { return el.dataset[key] === value; })[0];
+        if (active) active.focus();
+      }
+
+      function selectBucket(bucket, focus) {
+        currentBucket = bucket;
+        activate(tabs, "bucket", bucket);
+        activate(panels, "bucket", bucket);
+        if (focus) focusActive(tabs, "bucket", bucket);
+        syncHash();
+      }
+
+      function selectView(view, focus) {
+        currentView = view;
+        activate(viewTabs, "view", view);
+        activate(views, "view", view);
+        if (focus) focusActive(viewTabs, "view", view);
+        syncHash();
+      }
+
+      // Click plus arrow/Home/End roving focus, shared by both tablists.
+      function wireTablist(elements, key, select) {
+        elements.forEach(function (el, i) {
+          el.addEventListener("click", function () { select(el.dataset[key]); });
+          el.addEventListener("keydown", function (e) {
+            var next;
+            if (e.key === "ArrowRight") next = (i + 1) % elements.length;
+            else if (e.key === "ArrowLeft") next = (i - 1 + elements.length) % elements.length;
+            else if (e.key === "Home") next = 0;
+            else if (e.key === "End") next = elements.length - 1;
+            else return;
+            e.preventDefault();
+            select(elements[next].dataset[key], true);
+          });
+        });
+      }
+
+      wireTablist(tabs, "bucket", selectBucket);
+      wireTablist(viewTabs, "view", selectView);
+
+      // Restore the previous view/length from the URL hash, if it names a real one.
       var initial = (location.hash || "").replace("#", "");
-      if (initial && tabs.some(function (t) { return t.dataset.bucket === initial; })) {
-        select(initial);
-      }
+      if (initial === "records") selectView("records");
+      else if (initial && tabs.some(function (t) { return t.dataset.bucket === initial; })) selectBucket(initial);
     })();
   </script>
   <script>

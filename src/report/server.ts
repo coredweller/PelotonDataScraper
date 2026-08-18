@@ -6,7 +6,9 @@ import { logger } from "../logger.js";
 import { authenticate } from "../peloton/auth.js";
 import { PelotonClient } from "../peloton/client.js";
 import { queryFavorites } from "./queryFavorites.js";
+import { queryCompletedRides } from "./queryRecords.js";
 import { rankFavorites } from "./rankFavorites.js";
+import { rankRecords } from "./rankRecords.js";
 import { renderReport } from "./renderReport.js";
 
 const PORT = 4173;
@@ -46,7 +48,8 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && (url === "/" || url.startsWith("/?"))) {
       const buckets = rankFavorites(queryFavorites());
-      const html = renderReport(buckets, new Date());
+      const records = rankRecords(queryCompletedRides());
+      const html = renderReport(buckets, records, new Date());
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
       return;

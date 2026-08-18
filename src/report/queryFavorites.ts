@@ -1,5 +1,4 @@
-import Database from "better-sqlite3";
-import { config } from "../config.js";
+import { queryReadonly } from "../db/connection.js";
 import type { FavoriteWithLastDone } from "./rankFavorites.js";
 
 // Join each favorite ride to its most recent completion. The ride id lives only
@@ -24,13 +23,8 @@ const RANKED_FAVORITES_QUERY = `
 
 /**
  * Read every cycling favorite and its last-completed timestamp from the synced
- * database. Opens the DB read-only so it never contends with the sync writer.
+ * database.
  */
 export function queryFavorites(): FavoriteWithLastDone[] {
-  const db = new Database(config.DB_PATH, { readonly: true });
-  try {
-    return db.prepare(RANKED_FAVORITES_QUERY).all() as FavoriteWithLastDone[];
-  } finally {
-    db.close();
-  }
+  return queryReadonly<FavoriteWithLastDone>(RANKED_FAVORITES_QUERY);
 }

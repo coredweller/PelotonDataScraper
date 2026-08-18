@@ -18,7 +18,8 @@ export interface FavoriteWithLastDone {
 
 export type RankedBuckets = Record<BucketMinutes, FavoriteWithLastDone[]>;
 
-function isBucketMinutes(minutes: number): minutes is BucketMinutes {
+/** True when a whole-minute class length is one of the four ranked buckets. */
+export function isBucketMinutes(minutes: number): minutes is BucketMinutes {
   return (BUCKET_MINUTES as readonly number[]).includes(minutes);
 }
 
