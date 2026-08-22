@@ -178,3 +178,45 @@ describe("renderReport records view", () => {
     expect(html).toContain(`<span class="tile-label">Top instructor</span>\n        <span class="tile-value">Alex</span><span class="tile-note">2 rides</span>`);
   });
 });
+
+describe("renderReport most-ridden view", () => {
+  const workout = (rideId: string, overrides: Partial<CompletedRide> = {}): CompletedRide => ({
+    ride_id: rideId,
+    title: rideId,
+    instructor_name: null,
+    duration_seconds: 1200,
+    original_air_time: null,
+    join_token: null,
+    output_kj: 100,
+    started_at: 1_600_000_000,
+    ...overrides,
+  });
+
+  it("headlines each length with its most-ridden count and lists the tally per row", () => {
+    const html = renderReport(
+      bucketsWith(20, []),
+      records([
+        workout("repeat", { title: "20 min Pop Ride", started_at: 1_600_000_000 }),
+        workout("repeat", { title: "20 min Pop Ride", started_at: 1_600_100_000 }),
+        workout("repeat", { title: "20 min Pop Ride", started_at: 1_600_200_000 }),
+        workout("single"),
+      ]),
+      GENERATED_AT,
+    );
+
+    expect(html).toContain("Most ridden by class length");
+    expect(html).toContain(`<span class="pr">Most ridden 3×</span>`);
+    expect(html).toContain(`<span class="tally-count">3×</span>`);
+    expect(html).toContain(`<span class="tally-label">times</span>`);
+    expect(html).toContain(`<span class="tally-count">1×</span>`);
+    expect(html).toContain(`<span class="tally-label">time</span>`);
+  });
+
+  it("still renders the output leaderboard alongside the most-ridden one", () => {
+    const html = renderReport(bucketsWith(20, []), records([workout("pr", { output_kj: 240 })]), GENERATED_AT);
+
+    expect(html).toContain("Highest output by class length");
+    expect(html).toContain(`<span class="output-kj">240 kJ</span>`);
+    expect(html).toContain(`<span class="tally-count">1×</span>`);
+  });
+});

@@ -1,6 +1,6 @@
 import { BUCKET_MINUTES, isBucketMinutes, type BucketMinutes, type FavoriteWithLastDone } from "./rankFavorites.js";
 
-/** How many rides each class length's output leaderboard shows. */
+/** How many rides each class length's leaderboards show. */
 export const RECORDS_PER_BUCKET = 5;
 
 /** One completed cycling workout joined to the ride it was taken from. */
@@ -19,14 +19,17 @@ export interface CompletedRide {
 }
 
 /**
- * A ride's personal best. Extends the shape the "Rides to Do Next" list renders
- * so both views show the same per-ride information, plus the record itself.
+ * Everything one ride's completed workouts add up to: its personal best and how
+ * many times it's been taken. Extends the shape the "Rides to Do Next" list
+ * renders so both views show the same per-ride information.
  */
 export interface OutputRecord extends FavoriteWithLastDone {
   /** Best total output ever recorded on this ride, in kJ. */
   output_kj: number;
   /** Unix epoch seconds of the workout that set that best output. */
   achieved_at: number;
+  /** How many completed workouts of this ride there are. */
+  times_done: number;
 }
 
 /** Headline numbers across every completed cycling ride. */
@@ -46,7 +49,10 @@ export interface RideStats {
 
 export interface RideRecords {
   stats: RideStats;
+  /** Per class length, the rides with the highest output. */
   buckets: Record<BucketMinutes, OutputRecord[]>;
+  /** Per class length, the rides taken the most times. */
+  mostRidden: Record<BucketMinutes, OutputRecord[]>;
 }
 
 /** Average watts sustained over a workout: kJ → J spread across its seconds. */
@@ -56,8 +62,9 @@ function averageWatts(outputKj: number, durationSeconds: number): number {
 
 /**
  * Reduce every workout of a single ride to that ride's personal best: the
- * highest output, the date it was set, and the most recent time the ride was
- * taken. Ties go to the earliest workout — that's when the bar was first set.
+ * highest output, the date it was set, the most recent time the ride was taken,
+ * and how many times it's been taken. Ties go to the earliest workout — that's
+ * when the bar was first set.
  */
 function toOutputRecord(workouts: CompletedRide[]): OutputRecord {
   let best = workouts[0];
@@ -79,6 +86,7 @@ function toOutputRecord(workouts: CompletedRide[]): OutputRecord {
     last_done: lastDone,
     output_kj: best.output_kj,
     achieved_at: best.started_at,
+    times_done: workouts.length,
   };
 }
 
@@ -86,6 +94,12 @@ function toOutputRecord(workouts: CompletedRide[]): OutputRecord {
 function compareByOutput(a: OutputRecord, b: OutputRecord): number {
   if (b.output_kj !== a.output_kj) return b.output_kj - a.output_kj;
   return a.achieved_at - b.achieved_at;
+}
+
+/** Most-taken first; rides taken equally often fall back to the output order. */
+function compareByTimesDone(a: OutputRecord, b: OutputRecord): number {
+  if (b.times_done !== a.times_done) return b.times_done - a.times_done;
+  return compareByOutput(a, b);
 }
 
 function pickTopInstructor(rows: CompletedRide[]): { name: string; rides: number } | null {
@@ -130,9 +144,10 @@ function summarise(rows: CompletedRide[], uniqueRides: number): RideStats {
 }
 
 /**
- * Turn completed cycling workouts into per-length output leaderboards plus
- * overall stats. Every workout counts toward the stats; only rides whose length
- * rounds to 20/30/45/60 minutes appear on a leaderboard.
+ * Turn completed cycling workouts into per-length leaderboards — highest output
+ * and most times ridden — plus overall stats. Every workout counts toward the
+ * stats; only rides whose length rounds to 20/30/45/60 minutes appear on a
+ * leaderboard.
  */
 export function rankRecords(rows: CompletedRide[]): RideRecords {
   const byRide = new Map<string, CompletedRide[]>();
@@ -142,20 +157,24 @@ export function rankRecords(rows: CompletedRide[]): RideRecords {
     else byRide.set(row.ride_id, [row]);
   }
 
-  const buckets: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
+  // Every bucketed ride, before either leaderboard's ordering is applied.
+  const candidates: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
 
   for (const workouts of byRide.values()) {
     const record = toOutputRecord(workouts);
     if (record.duration_seconds === null) continue;
     const minutes = Math.round(record.duration_seconds / 60);
     if (!isBucketMinutes(minutes)) continue;
-    buckets[minutes].push(record);
+    candidates[minutes].push(record);
   }
+
+  const buckets: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
+  const mostRidden: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
 
   for (const minutes of BUCKET_MINUTES) {
-    buckets[minutes].sort(compareByOutput);
-    buckets[minutes] = buckets[minutes].slice(0, RECORDS_PER_BUCKET);
+    buckets[minutes] = candidates[minutes].slice().sort(compareByOutput).slice(0, RECORDS_PER_BUCKET);
+    mostRidden[minutes] = candidates[minutes].slice().sort(compareByTimesDone).slice(0, RECORDS_PER_BUCKET);
   }
 
-  return { stats: summarise(rows, byRide.size), buckets };
+  return { stats: summarise(rows, byRide.size), buckets, mostRidden };
 }
