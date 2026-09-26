@@ -7,6 +7,16 @@ const GRAPHQL_URL = "https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql
 // The "Hip Hop" value of the class library's super_genre_id (Music) filter, from
 // /api/ride/filters. The archived-ride endpoint has no title search, so this is
 // the narrowest server-side filter that still covers every "90s Hip Hop" ride.
+//
+// KNOWN FAILURE MODE — HARDCODED ID (see README "Troubleshooting: 90s Hip Hop tab is empty"):
+// If Peloton changes this ID, the filter matches nothing and fails SILENTLY. The
+// sync logs "Unfavorited 90s Hip Hop rides synced" with scanned: 0 (normally ~1,850)
+// and the 90s Hip Hop tab says every ride is already favorited. To fix:
+//   1. GET https://api.onepeloton.com/api/ride/filters?library_type=on_demand&browse_category=cycling
+//      (same bearer auth as the rest of this client).
+//   2. In filters[] find name === "super_genre_id", then the value whose
+//      display_name === "Hip Hop", and copy its `value` here.
+//   3. Run `npm run sync` and confirm `scanned` is back in the thousands.
 const HIP_HOP_SUPER_GENRE_ID = "c9d4dee696b04477afc88aa22285025f";
 
 export interface StackResponse {

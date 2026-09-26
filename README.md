@@ -64,6 +64,23 @@ is added straight to your real Peloton stack (the button turns into **Stacked âœ
 shows your current stack count). Runs locally on your machine and uses your stored login â€” keep the
 port to yourself; don't expose it to the network.
 
+## Troubleshooting: 90s Hip Hop tab is empty
+
+If the **90s Hip Hop** tab suddenly says every ride is already in your favorites, check the sync
+log line `Unfavorited 90s Hip Hop rides synced`. A normal run shows `scanned` in the thousands
+(~1,850 as of September 2026). **`scanned: 0` means Peloton changed its "Hip Hop" genre ID.** The sync
+doesn't treat that as an error, so nothing else will warn you.
+
+The ID is hardcoded as `HIP_HOP_SUPER_GENRE_ID` in [src/peloton/client.ts](src/peloton/client.ts).
+To get the current one:
+
+1. Request `https://api.onepeloton.com/api/ride/filters?library_type=on_demand&browse_category=cycling`
+   with your Peloton bearer token.
+2. In `filters`, find the entry with `name: "super_genre_id"`. In its `values`, find
+   `display_name: "Hip Hop"` and copy that entry's `value`.
+3. Paste it into `HIP_HOP_SUPER_GENRE_ID`, run `npm run sync`, and confirm `scanned` is back in the
+   thousands.
+
 ## Development
 
 ```bash
