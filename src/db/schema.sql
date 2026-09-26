@@ -31,6 +31,19 @@ CREATE TABLE IF NOT EXISTS favorite_rides (
   synced_at          INTEGER NOT NULL
 );
 
+-- Cycling rides titled "90s Hip Hop" that were not favorited as of the last sync.
+CREATE TABLE IF NOT EXISTS hip_hop_90s_rides (
+  id                 TEXT PRIMARY KEY,
+  title              TEXT,
+  instructor_id      TEXT,
+  fitness_discipline TEXT,
+  duration_seconds   INTEGER,
+  difficulty_rating  REAL,
+  original_air_time  INTEGER,
+  raw_json           TEXT NOT NULL,
+  synced_at          INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS instructors (
   id        TEXT PRIMARY KEY,
   name      TEXT,

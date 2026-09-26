@@ -23,19 +23,38 @@ function renderBucket(minutes: BucketMinutes, rides: FavoriteWithLastDone[], act
       </section>`;
 }
 
-/** One of the two top-level views; "Rides to Do Next" is active by default. */
+/** Every un-favorited "90s Hip Hop" ride in one list, whatever its length. */
+function renderHipHop90s(rides: FavoriteWithLastDone[]): string {
+  const body =
+    rides.length === 0
+      ? `<li class="empty">Every 90s Hip Hop ride is already in your favorites.</li>`
+      : rides.map((ride, index) => renderRide(ride, index + 1)).join("");
+
+  return `
+      <section class="card">
+        <ol class="rides">${body}
+        </ol>
+      </section>`;
+}
+
+/** One of the top-level views; "Rides to Do Next" is active by default. */
 function renderViewTab(view: string, labelText: string, active: boolean): string {
   return `
       <button class="view-tab${active ? " active" : ""}" role="tab" id="view-tab-${view}" data-view="${view}" aria-controls="view-${view}" aria-selected="${active}" tabindex="${active ? 0 : -1}">${labelText}</button>`;
 }
 
 /**
- * Render both views into a single self-contained, theme-aware HTML document
+ * Render every view into a single self-contained, theme-aware HTML document
  * (all CSS inline, no external assets): "Rides to Do Next", where each length's
- * list puts the ride to do next at the top, and "Records", which ranks
- * completed rides by output.
+ * list puts the ride to do next at the top; "Records", which ranks completed
+ * rides by output; and "90s Hip Hop", the matching rides not yet favorited.
  */
-export function renderReport(buckets: RankedBuckets, records: RideRecords, generatedAt: Date): string {
+export function renderReport(
+  buckets: RankedBuckets,
+  records: RideRecords,
+  hipHop90s: FavoriteWithLastDone[],
+  generatedAt: Date,
+): string {
   const generatedLabel = generatedAt.toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -109,6 +128,7 @@ export function renderReport(buckets: RankedBuckets, records: RideRecords, gener
     }
     .view-tab:hover { color: var(--text); }
     .view-tab.active { color: #fff; background: var(--accent); }
+    .view-tab.active .count { color: #fff; background: #ffffff2a; border-color: transparent; }
     .view[hidden] { display: none; }
     .view-note { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.9rem; }
     .tabs {
@@ -207,7 +227,7 @@ export function renderReport(buckets: RankedBuckets, records: RideRecords, gener
     <h1>Peloton</h1>
     <p class="subtitle">Synced favorites and ride history · generated ${escapeHtml(generatedLabel)}<span id="stack-status"></span></p>
   </header>
-  <nav class="views" role="tablist" aria-label="View">${renderViewTab("next", "Rides to Do Next", true)}${renderViewTab("records", "Records", false)}
+  <nav class="views" role="tablist" aria-label="View">${renderViewTab("next", "Rides to Do Next", true)}${renderViewTab("records", "Records", false)}${renderViewTab("hiphop", `90s Hip Hop <span class="count">${hipHop90s.length}</span>`, false)}
   </nav>
   <main>
     <section class="view" id="view-next" role="tabpanel" aria-labelledby="view-tab-next" data-view="next">
@@ -217,6 +237,9 @@ export function renderReport(buckets: RankedBuckets, records: RideRecords, gener
     </section>
     <section class="view" id="view-records" role="tabpanel" aria-labelledby="view-tab-records" data-view="records" hidden>
       <p class="view-note">Every completed cycling ride, ranked by total output.</p>${renderRecords(records)}
+    </section>
+    <section class="view" id="view-hiphop" role="tabpanel" aria-labelledby="view-tab-hiphop" data-view="hiphop" hidden>
+      <p class="view-note">Cycling rides of any length with “90s Hip Hop” in the title that aren’t in your favorites, newest first. Refreshed on every sync.</p>${renderHipHop90s(hipHop90s)}
     </section>
   </main>
   <script>
@@ -230,7 +253,7 @@ export function renderReport(buckets: RankedBuckets, records: RideRecords, gener
 
       // Remember both choices so a reload (npm run serve re-renders on each GET) lands back here.
       function syncHash() {
-        var hash = "#" + (currentView === "records" ? "records" : currentBucket);
+        var hash = "#" + (currentView === "next" ? currentBucket : currentView);
         if (history.replaceState) history.replaceState(null, "", hash);
         else location.hash = hash;
       }
@@ -294,7 +317,7 @@ export function renderReport(buckets: RankedBuckets, records: RideRecords, gener
 
       // Restore the previous view/length from the URL hash, if it names a real one.
       var initial = (location.hash || "").replace("#", "");
-      if (initial === "records") selectView("records");
+      if (viewTabs.some(function (t) { return t.dataset.view === initial; })) selectView(initial);
       else if (initial && tabs.some(function (t) { return t.dataset.bucket === initial; })) selectBucket(initial);
     })();
   </script>

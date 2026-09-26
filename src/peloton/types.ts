@@ -53,6 +53,8 @@ export interface RideSummary {
   duration?: number;
   difficulty_rating_avg?: number;
   original_air_time?: number;
+  /** Whether the authenticated user has this ride favorited (bookmarked). */
+  is_favorite?: boolean;
 }
 
 export interface UserProfile {

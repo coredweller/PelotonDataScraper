@@ -5,7 +5,7 @@ import { openDatabase } from "../db/connection.js";
 import { logger } from "../logger.js";
 import { authenticate } from "../peloton/auth.js";
 import { PelotonClient } from "../peloton/client.js";
-import { queryFavorites } from "./queryFavorites.js";
+import { queryFavorites, queryUnfavoritedHipHop90s } from "./queryFavorites.js";
 import { queryCompletedRides } from "./queryRecords.js";
 import { rankFavorites } from "./rankFavorites.js";
 import { rankRecords } from "./rankRecords.js";
@@ -49,7 +49,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && (url === "/" || url.startsWith("/?"))) {
       const buckets = rankFavorites(queryFavorites());
       const records = rankRecords(queryCompletedRides());
-      const html = renderReport(buckets, records, new Date());
+      const html = renderReport(buckets, records, queryUnfavoritedHipHop90s(), new Date());
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
       return;

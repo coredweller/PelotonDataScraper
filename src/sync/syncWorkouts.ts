@@ -1,55 +1,32 @@
 import { config } from "../config.js";
 import { AuthStateRepository } from "../db/authStateRepository.js";
 import { openDatabase } from "../db/connection.js";
-import { FavoriteRidesRepository } from "../db/favoriteRidesRepository.js";
 import { InstructorsRepository } from "../db/instructorsRepository.js";
+import { RidesRepository } from "../db/ridesRepository.js";
 import { WorkoutsRepository } from "../db/workoutsRepository.js";
 import { logger } from "../logger.js";
 import { authenticate } from "../peloton/auth.js";
 import { PelotonClient } from "../peloton/client.js";
-import type { Instructor, RideSummary, WorkoutSummary } from "../peloton/types.js";
-import { mapFavoriteRide } from "./mapFavoriteRide.js";
+import type { WorkoutSummary } from "../peloton/types.js";
+import { selectUnfavoritedHipHop90s } from "./hipHop90s.js";
 import { mapInstructor } from "./mapInstructor.js";
+import { mapRide } from "./mapRide.js";
 import { mapWorkout } from "./mapWorkout.js";
-import { isLastPage } from "./pagination.js";
+import { fetchAllPages, isLastPage } from "./pagination.js";
 
 const BACKFILL_PAGE_SIZE = 25;
 const FAVORITES_PAGE_SIZE = 50;
 const INSTRUCTORS_PAGE_SIZE = 50;
-
-async function fetchFavoriteRides(client: PelotonClient): Promise<RideSummary[]> {
-  const rides: RideSummary[] = [];
-  let page = 0;
-  for (;;) {
-    const response = await client.getFavoriteRides(page, FAVORITES_PAGE_SIZE);
-    rides.push(...response.data);
-    if (isLastPage(response.data.length, FAVORITES_PAGE_SIZE)) {
-      break;
-    }
-    page += 1;
-  }
-  return rides;
-}
-
-async function fetchInstructors(client: PelotonClient): Promise<Instructor[]> {
-  const instructors: Instructor[] = [];
-  let page = 0;
-  for (;;) {
-    const response = await client.getInstructors(page, INSTRUCTORS_PAGE_SIZE);
-    instructors.push(...response.data);
-    if (isLastPage(response.data.length, INSTRUCTORS_PAGE_SIZE)) {
-      break;
-    }
-    page += 1;
-  }
-  return instructors;
-}
+// The archived-ride endpoint caps pages at 100 even when asked for more, so a
+// larger size would make the first page look short and end paging early.
+const HIP_HOP_PAGE_SIZE = 100;
 
 export async function syncWorkouts(): Promise<void> {
   const db = openDatabase();
   const repository = new WorkoutsRepository(db);
   const authStateRepository = new AuthStateRepository(db);
-  const favoriteRidesRepository = new FavoriteRidesRepository(db);
+  const favoriteRidesRepository = new RidesRepository(db, "favorite_rides");
+  const hipHop90sRidesRepository = new RidesRepository(db, "hip_hop_90s_rides");
   const instructorsRepository = new InstructorsRepository(db);
 
   const auth = await authenticate(config.PELOTON_USERNAME, config.PELOTON_PASSWORD, authStateRepository.get());
@@ -99,8 +76,8 @@ export async function syncWorkouts(): Promise<void> {
 
   logger.info({ fetched: summaries.length, inserted, skipped }, "Peloton sync complete");
 
-  const favoriteRides = await fetchFavoriteRides(client);
-  const favoriteRideRows = favoriteRides.map((ride) => mapFavoriteRide(ride, syncedAt));
+  const favoriteRides = await fetchAllPages((page, limit) => client.getFavoriteRides(page, limit), FAVORITES_PAGE_SIZE);
+  const favoriteRideRows = favoriteRides.map((ride) => mapRide(ride, syncedAt));
   const favoritesResult = favoriteRidesRepository.replaceAll(favoriteRideRows);
   if (!favoritesResult.ok) {
     logger.error({ err: favoritesResult.error }, "Failed to sync favorite rides");
@@ -108,7 +85,19 @@ export async function syncWorkouts(): Promise<void> {
     logger.info({ count: favoritesResult.value.count }, "Favorite rides synced");
   }
 
-  const instructors = await fetchInstructors(client);
+  const hipHopRides = await fetchAllPages((page, limit) => client.getHipHopCyclingRides(page, limit), HIP_HOP_PAGE_SIZE);
+  const hipHop90sRows = selectUnfavoritedHipHop90s(hipHopRides).map((ride) => mapRide(ride, syncedAt));
+  const hipHop90sResult = hipHop90sRidesRepository.replaceAll(hipHop90sRows);
+  if (!hipHop90sResult.ok) {
+    logger.error({ err: hipHop90sResult.error }, "Failed to sync unfavorited 90s Hip Hop rides");
+  } else {
+    logger.info(
+      { scanned: hipHopRides.length, unfavorited: hipHop90sResult.value.count },
+      "Unfavorited 90s Hip Hop rides synced",
+    );
+  }
+
+  const instructors = await fetchAllPages((page, limit) => client.getInstructors(page, limit), INSTRUCTORS_PAGE_SIZE);
   const instructorRows = instructors.map((instructor) => mapInstructor(instructor, syncedAt));
   const instructorsResult = instructorsRepository.replaceAll(instructorRows);
   if (!instructorsResult.ok) {

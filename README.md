@@ -37,6 +37,11 @@ Both modes show your favorite **cycling** rides bucketed by length (20 / 30 / 45
 ordered so the ride you've done **least recently is at the top** (never-done rides first). They read
 the same synced database — run `npm run sync` first, and re-sync whenever you want newer numbers.
 
+The page also has a **Records** tab (personal bests and most-ridden rides per length) and a
+**90s Hip Hop** tab: every cycling ride of any length with "90s Hip Hop" in its title that isn't in
+your favorites yet, newest first. `npm run sync` refreshes that list from Peloton's class library
+on every run.
+
 ### 1. Generated static page (offline, no server)
 
 ```bash

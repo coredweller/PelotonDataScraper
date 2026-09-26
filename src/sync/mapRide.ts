@@ -1,7 +1,7 @@
-import type { FavoriteRideRow } from "../db/favoriteRidesRepository.js";
+import type { RideRow } from "../db/ridesRepository.js";
 import type { RideSummary } from "../peloton/types.js";
 
-export function mapFavoriteRide(ride: RideSummary, syncedAt: number): FavoriteRideRow {
+export function mapRide(ride: RideSummary, syncedAt: number): RideRow {
   return {
     id: ride.id,
     title: ride.title ?? null,

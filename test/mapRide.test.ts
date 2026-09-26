@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mapFavoriteRide } from "../src/sync/mapFavoriteRide.js";
+import { mapRide } from "../src/sync/mapRide.js";
 import type { RideSummary } from "../src/peloton/types.js";
 
-describe("mapFavoriteRide", () => {
+describe("mapRide", () => {
   it("maps a fully populated ride to a typed row", () => {
     const ride: RideSummary = {
       id: "ride-1",
@@ -14,7 +14,7 @@ describe("mapFavoriteRide", () => {
       original_air_time: 1_690_000_000,
     };
 
-    const row = mapFavoriteRide(ride, 1_700_002_000);
+    const row = mapRide(ride, 1_700_002_000);
 
     expect(row).toEqual({
       id: "ride-1",
@@ -32,7 +32,7 @@ describe("mapFavoriteRide", () => {
   it("falls back to nulls when optional fields are missing", () => {
     const ride: RideSummary = { id: "ride-2" };
 
-    const row = mapFavoriteRide(ride, 1_700_100_500);
+    const row = mapRide(ride, 1_700_100_500);
 
     expect(row.id).toBe("ride-2");
     expect(row.title).toBeNull();

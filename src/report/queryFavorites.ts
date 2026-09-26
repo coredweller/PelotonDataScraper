@@ -28,3 +28,27 @@ const RANKED_FAVORITES_QUERY = `
 export function queryFavorites(): FavoriteWithLastDone[] {
   return queryReadonly<FavoriteWithLastDone>(RANKED_FAVORITES_QUERY);
 }
+
+// Same shape and last-done join as the favorites query, over the "90s Hip Hop"
+// rides the sync found un-favorited. Newest release first, so rides added since
+// you last looked are at the top.
+const UNFAVORITED_HIP_HOP_90S_QUERY = `
+  SELECT
+    h.id                 AS id,
+    h.title              AS title,
+    h.duration_seconds   AS duration_seconds,
+    i.name               AS instructor_name,
+    json_extract(h.raw_json, '$.join_tokens.on_demand') AS join_token,
+    h.original_air_time  AS original_air_time,
+    MAX(w.started_at)    AS last_done
+  FROM hip_hop_90s_rides h
+  LEFT JOIN instructors i ON i.id = h.instructor_id
+  LEFT JOIN workouts    w ON json_extract(w.raw_json, '$.ride.id') = h.id
+  GROUP BY h.id
+  ORDER BY h.original_air_time DESC
+`;
+
+/** Read the un-favorited "90s Hip Hop" rides found by the last sync, with their last-completed timestamp. */
+export function queryUnfavoritedHipHop90s(): FavoriteWithLastDone[] {
+  return queryReadonly<FavoriteWithLastDone>(UNFAVORITED_HIP_HOP_90S_QUERY);
+}

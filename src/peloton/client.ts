@@ -4,6 +4,10 @@ import type { Instructor, Paginated, RideSummary, UserProfile, WorkoutDetail, Wo
 
 const BASE_URL = "https://api.onepeloton.com";
 const GRAPHQL_URL = "https://gql-graphql-gateway.prod.k8s.onepeloton.com/graphql";
+// The "Hip Hop" value of the class library's super_genre_id (Music) filter, from
+// /api/ride/filters. The archived-ride endpoint has no title search, so this is
+// the narrowest server-side filter that still covers every "90s Hip Hop" ride.
+const HIP_HOP_SUPER_GENRE_ID = "c9d4dee696b04477afc88aa22285025f";
 
 export interface StackResponse {
   numClasses: number;
@@ -53,6 +57,12 @@ export class PelotonClient {
   getFavoriteRides(page: number, limit: number): Promise<Paginated<RideSummary>> {
     return this.request<Paginated<RideSummary>>(
       `/api/v2/ride/archived?is_favorite_ride=true&limit=${limit}&page=${page}&sort_by=original_air_time`,
+    );
+  }
+
+  getHipHopCyclingRides(page: number, limit: number): Promise<Paginated<RideSummary>> {
+    return this.request<Paginated<RideSummary>>(
+      `/api/v2/ride/archived?browse_category=cycling&super_genre_id=${HIP_HOP_SUPER_GENRE_ID}&limit=${limit}&page=${page}`,
     );
   }
 

@@ -44,7 +44,7 @@ describe("renderReport last-done cell", () => {
   it("shows the release date and the last-done date, each under its own label", () => {
     const airTime = 1_657_540_800; // 2022-07-11
     const lastDone = 1_659_312_000; // 2022-08-01
-    const html = renderReport(bucketsWith(30, [ride({ id: "a", last_done: lastDone, original_air_time: airTime })]), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(30, [ride({ id: "a", last_done: lastDone, original_air_time: airTime })]), records(), [], GENERATED_AT);
 
     expect(html).toContain(`<span class="dlabel">Released</span>${label(airTime)}`);
     expect(html).toContain(`<span class="dlabel">Last done</span>${label(lastDone)}`);
@@ -52,7 +52,7 @@ describe("renderReport last-done cell", () => {
 
   it("shows a 'Never done' badge and no last-done date when the ride was never completed", () => {
     const airTime = 1_657_540_800;
-    const html = renderReport(bucketsWith(30, [ride({ id: "n", last_done: null, original_air_time: airTime })]), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(30, [ride({ id: "n", last_done: null, original_air_time: airTime })]), records(), [], GENERATED_AT);
 
     expect(html).toContain(`<span class="dlabel">Released</span>${label(airTime)}`);
     expect(html).toContain(`<span class="never">Never done</span>`);
@@ -61,7 +61,7 @@ describe("renderReport last-done cell", () => {
 
   it("omits the release date when the ride has no original air time", () => {
     const lastDone = 1_659_312_000;
-    const html = renderReport(bucketsWith(30, [ride({ id: "r", last_done: lastDone, original_air_time: null })]), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(30, [ride({ id: "r", last_done: lastDone, original_air_time: null })]), records(), [], GENERATED_AT);
 
     expect(html).not.toContain("Released");
     expect(html).toContain(`<span class="dlabel">Last done</span>${label(lastDone)}`);
@@ -70,14 +70,14 @@ describe("renderReport last-done cell", () => {
 
 describe("renderReport tabs", () => {
   it("marks the 20-min tab active and every other tab inactive", () => {
-    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), [], GENERATED_AT);
 
     expect(html).toContain(`id="tab-20" data-bucket="20" aria-controls="panel-20" aria-selected="true" tabindex="0"`);
     expect(html).toContain(`id="tab-30" data-bucket="30" aria-controls="panel-30" aria-selected="false" tabindex="-1"`);
   });
 
   it("shows only the first panel and hides the rest", () => {
-    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), [], GENERATED_AT);
 
     expect(html).toContain(`id="panel-20" role="tabpanel" aria-labelledby="tab-20" data-bucket="20">`);
     expect(html).toContain(`id="panel-30" role="tabpanel" aria-labelledby="tab-30" data-bucket="30" hidden>`);
@@ -87,7 +87,7 @@ describe("renderReport tabs", () => {
     const html = renderReport(
       bucketsWith(45, [ride({ id: "a" }), ride({ id: "b" }), ride({ id: "c" })]),
       records(),
-      GENERATED_AT,
+      [], GENERATED_AT,
     );
 
     expect(html).toContain(`id="tab-45" data-bucket="45" aria-controls="panel-45" aria-selected="false" tabindex="-1">45 min <span class="count">3</span>`);
@@ -97,12 +97,46 @@ describe("renderReport tabs", () => {
 
 describe("renderReport view switcher", () => {
   it("shows the rides view first and hides the records view", () => {
-    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), [], GENERATED_AT);
 
     expect(html).toContain(`id="view-tab-next" data-view="next" aria-controls="view-next" aria-selected="true" tabindex="0"`);
     expect(html).toContain(`id="view-tab-records" data-view="records" aria-controls="view-records" aria-selected="false" tabindex="-1"`);
     expect(html).toContain(`id="view-next" role="tabpanel" aria-labelledby="view-tab-next" data-view="next">`);
     expect(html).toContain(`id="view-records" role="tabpanel" aria-labelledby="view-tab-records" data-view="records" hidden>`);
+  });
+});
+
+describe("renderReport 90s Hip Hop view", () => {
+  it("adds a hidden third view tab labelled with the ride count", () => {
+    const html = renderReport(bucketsWith(20, []), records(), [ride({ id: "a" }), ride({ id: "b" })], GENERATED_AT);
+
+    expect(html).toContain(
+      `id="view-tab-hiphop" data-view="hiphop" aria-controls="view-hiphop" aria-selected="false" tabindex="-1">90s Hip Hop <span class="count">2</span>`,
+    );
+    expect(html).toContain(`id="view-hiphop" role="tabpanel" aria-labelledby="view-tab-hiphop" data-view="hiphop" hidden>`);
+  });
+
+  it("lists each ride with its stack button, in the order given", () => {
+    const html = renderReport(
+      bucketsWith(20, []),
+      records(),
+      [
+        ride({ id: "new", title: "45 min 90s Hip Hop Ride", join_token: "tok-new" }),
+        ride({ id: "old", title: "20 min 90s Hip Hop Ride" }),
+      ],
+      GENERATED_AT,
+    );
+
+    const view = html.slice(html.indexOf(`id="view-hiphop"`));
+    expect(view.indexOf("45 min 90s Hip Hop Ride")).toBeLessThan(view.indexOf("20 min 90s Hip Hop Ride"));
+    expect(view).toContain(`data-join-token="tok-new"`);
+  });
+
+  it("says so when every 90s Hip Hop ride is already favorited", () => {
+    const html = renderReport(bucketsWith(20, []), records(), [], GENERATED_AT);
+
+    expect(html).toContain("Every 90s Hip Hop ride is already in your favorites.");
+    expect(html).toContain(`90s Hip Hop <span class="count">0</span>`);
   });
 });
 
@@ -123,7 +157,7 @@ describe("renderReport records view", () => {
     const html = renderReport(
       bucketsWith(20, []),
       records([record({ ride_id: "pr", output_kj: 257.4, started_at: achievedAt })]),
-      GENERATED_AT,
+      [], GENERATED_AT,
     );
 
     expect(html).toContain(`PR 257 kJ on ${label(achievedAt)}`);
@@ -136,7 +170,7 @@ describe("renderReport records view", () => {
       records([
         record({ ride_id: "pr", title: "20 min 90s Hip Hop Ride", instructor_name: "Alex Toussaint", output_kj: 240, original_air_time: airTime }),
       ]),
-      GENERATED_AT,
+      [], GENERATED_AT,
     );
 
     expect(html).toContain(`<li class="item item--record">`);
@@ -151,14 +185,14 @@ describe("renderReport records view", () => {
     const html = renderReport(
       bucketsWith(20, []),
       records([record({ ride_id: "pr", join_token: "tok-123" })]),
-      GENERATED_AT,
+      [], GENERATED_AT,
     );
 
     expect(html).toContain(`data-join-token="tok-123"`);
   });
 
   it("reports empty lengths instead of rendering an empty leaderboard", () => {
-    const html = renderReport(bucketsWith(20, []), records(), GENERATED_AT);
+    const html = renderReport(bucketsWith(20, []), records(), [], GENERATED_AT);
 
     expect(html).toContain("No completed rides at this length yet.");
   });
@@ -170,7 +204,7 @@ describe("renderReport records view", () => {
         record({ ride_id: "a", instructor_name: "Alex", output_kj: 240 }),
         record({ ride_id: "b", instructor_name: "Alex", output_kj: 100 }),
       ]),
-      GENERATED_AT,
+      [], GENERATED_AT,
     );
 
     expect(html).toContain(`<span class="tile-label">Total output</span>\n        <span class="tile-value">340 kJ</span>`);
@@ -201,7 +235,7 @@ describe("renderReport most-ridden view", () => {
         workout("repeat", { title: "20 min Pop Ride", started_at: 1_600_200_000 }),
         workout("single"),
       ]),
-      GENERATED_AT,
+      [], GENERATED_AT,
     );
 
     expect(html).toContain("Most ridden by class length");
@@ -213,7 +247,7 @@ describe("renderReport most-ridden view", () => {
   });
 
   it("still renders the output leaderboard alongside the most-ridden one", () => {
-    const html = renderReport(bucketsWith(20, []), records([workout("pr", { output_kj: 240 })]), GENERATED_AT);
+    const html = renderReport(bucketsWith(20, []), records([workout("pr", { output_kj: 240 })]), [], GENERATED_AT);
 
     expect(html).toContain("Highest output by class length");
     expect(html).toContain(`<span class="output-kj">240 kJ</span>`);

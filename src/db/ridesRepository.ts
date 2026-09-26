@@ -2,7 +2,10 @@ import type Database from "better-sqlite3";
 import { logger } from "../logger.js";
 import { fail, ok, type Result } from "../result.js";
 
-export interface FavoriteRideRow {
+/** The tables that hold ride (class) snapshots; all share the same columns. */
+export type RideTable = "favorite_rides" | "hip_hop_90s_rides";
+
+export interface RideRow {
   id: string;
   title: string | null;
   instructor_id: string | null;
@@ -14,16 +17,19 @@ export interface FavoriteRideRow {
   synced_at: number;
 }
 
-export class FavoriteRidesRepository {
-  constructor(private readonly db: Database.Database) {}
+export class RidesRepository {
+  constructor(
+    private readonly db: Database.Database,
+    private readonly table: RideTable,
+  ) {}
 
-  // Favorites are a live "current state" list from the API (unfavoriting removes a ride from it),
-  // so each sync replaces the table wholesale rather than upserting.
-  replaceAll(rows: FavoriteRideRow[]): Result<{ count: number }> {
+  // Each ride table is a live "current state" list from the API (e.g. unfavoriting removes a ride
+  // from favorites), so each sync replaces the table wholesale rather than upserting.
+  replaceAll(rows: RideRow[]): Result<{ count: number }> {
     try {
-      const deleteAll = this.db.prepare("DELETE FROM favorite_rides");
+      const deleteAll = this.db.prepare(`DELETE FROM ${this.table}`);
       const insert = this.db.prepare(`
-        INSERT INTO favorite_rides (
+        INSERT INTO ${this.table} (
           id, title, instructor_id, fitness_discipline, duration_seconds,
           difficulty_rating, original_air_time, raw_json, synced_at
         ) VALUES (
@@ -31,7 +37,7 @@ export class FavoriteRidesRepository {
           @difficulty_rating, @original_air_time, @raw_json, @synced_at
         )
       `);
-      const replace = this.db.transaction((rides: FavoriteRideRow[]) => {
+      const replace = this.db.transaction((rides: RideRow[]) => {
         deleteAll.run();
         for (const row of rides) {
           insert.run(row);
@@ -40,7 +46,7 @@ export class FavoriteRidesRepository {
       replace(rows);
       return ok({ count: rows.length });
     } catch (error) {
-      logger.error({ err: error }, "Failed to replace favorite rides");
+      logger.error({ err: error, table: this.table }, "Failed to replace rides");
       return fail(error instanceof Error ? error : new Error(String(error)));
     }
   }

@@ -13,7 +13,7 @@ export class InstructorsRepository {
   constructor(private readonly db: Database.Database) {}
 
   // The API returns the full instructor roster each call, so each sync replaces the table
-  // wholesale rather than upserting (consistent with FavoriteRidesRepository).
+  // wholesale rather than upserting (consistent with RidesRepository).
   replaceAll(rows: InstructorRow[]): Result<{ count: number }> {
     try {
       const deleteAll = this.db.prepare("DELETE FROM instructors");
