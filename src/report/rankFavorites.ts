@@ -1,5 +1,5 @@
-/** The four class lengths (in minutes) the dashboard ranks. */
-export const BUCKET_MINUTES = [20, 30, 45, 60] as const;
+/** The class lengths (in minutes) the dashboard ranks. */
+export const BUCKET_MINUTES = [15, 20, 30, 45, 60] as const;
 export type BucketMinutes = (typeof BUCKET_MINUTES)[number];
 
 /** One favorite cycling ride plus when it was last completed. */
@@ -18,7 +18,7 @@ export interface FavoriteWithLastDone {
 
 export type RankedBuckets = Record<BucketMinutes, FavoriteWithLastDone[]>;
 
-/** True when a whole-minute class length is one of the four ranked buckets. */
+/** True when a whole-minute class length is one of the ranked buckets. */
 export function isBucketMinutes(minutes: number): minutes is BucketMinutes {
   return (BUCKET_MINUTES as readonly number[]).includes(minutes);
 }
@@ -36,12 +36,12 @@ function compareByLastDone(a: FavoriteWithLastDone, b: FavoriteWithLastDone): nu
 }
 
 /**
- * Bucket cycling favorites into 20/30/45/60-minute lists and sort each list so
+ * Bucket cycling favorites into 15/20/30/45/60-minute lists and sort each list so
  * the ride done furthest in the past (or never) is first. Rides whose length
- * doesn't round to one of the four target buckets are dropped.
+ * doesn't round to one of the target buckets are dropped.
  */
 export function rankFavorites(rows: FavoriteWithLastDone[]): RankedBuckets {
-  const buckets: RankedBuckets = { 20: [], 30: [], 45: [], 60: [] };
+  const buckets: RankedBuckets = { 15: [], 20: [], 30: [], 45: [], 60: [] };
 
   for (const row of rows) {
     if (row.duration_seconds === null) continue;

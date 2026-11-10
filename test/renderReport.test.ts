@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderReport } from "../src/report/renderReport.js";
-import type { FavoriteWithLastDone, RankedBuckets } from "../src/report/rankFavorites.js";
+import { rankFavorites, type BucketMinutes, type FavoriteWithLastDone, type RankedBuckets } from "../src/report/rankFavorites.js";
 import { rankRecords, type CompletedRide } from "../src/report/rankRecords.js";
 
 const GENERATED_AT = new Date("2026-07-17T10:00:00Z");
@@ -34,8 +34,8 @@ function records(workouts: CompletedRide[] = []) {
 }
 
 /** Empty buckets with `rides` placed in the given length. */
-function bucketsWith(minutes: 20 | 30 | 45 | 60, rides: FavoriteWithLastDone[]): RankedBuckets {
-  const buckets: RankedBuckets = { 20: [], 30: [], 45: [], 60: [] };
+function bucketsWith(minutes: BucketMinutes, rides: FavoriteWithLastDone[]): RankedBuckets {
+  const buckets: RankedBuckets = { 15: [], 20: [], 30: [], 45: [], 60: [] };
   buckets[minutes] = rides;
   return buckets;
 }
@@ -69,18 +69,26 @@ describe("renderReport last-done cell", () => {
 });
 
 describe("renderReport tabs", () => {
-  it("marks the 20-min tab active and every other tab inactive", () => {
-    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), [], GENERATED_AT);
+  it("marks the 15-min tab active and every other tab inactive", () => {
+    const html = renderReport(bucketsWith(15, [ride({ id: "a" })]), records(), [], GENERATED_AT);
 
-    expect(html).toContain(`id="tab-20" data-bucket="20" aria-controls="panel-20" aria-selected="true" tabindex="0"`);
-    expect(html).toContain(`id="tab-30" data-bucket="30" aria-controls="panel-30" aria-selected="false" tabindex="-1"`);
+    expect(html).toContain(`id="tab-15" data-bucket="15" aria-controls="panel-15" aria-selected="true" tabindex="0"`);
+    expect(html).toContain(`id="tab-20" data-bucket="20" aria-controls="panel-20" aria-selected="false" tabindex="-1"`);
   });
 
   it("shows only the first panel and hides the rest", () => {
-    const html = renderReport(bucketsWith(20, [ride({ id: "a" })]), records(), [], GENERATED_AT);
+    const html = renderReport(bucketsWith(15, [ride({ id: "a" })]), records(), [], GENERATED_AT);
 
-    expect(html).toContain(`id="panel-20" role="tabpanel" aria-labelledby="tab-20" data-bucket="20">`);
-    expect(html).toContain(`id="panel-30" role="tabpanel" aria-labelledby="tab-30" data-bucket="30" hidden>`);
+    expect(html).toContain(`id="panel-15" role="tabpanel" aria-labelledby="tab-15" data-bucket="15">`);
+    expect(html).toContain(`id="panel-20" role="tabpanel" aria-labelledby="tab-20" data-bucket="20" hidden>`);
+  });
+
+  it("buckets a 15-minute favorite into the 15-min tab", () => {
+    const buckets = rankFavorites([ride({ id: "short", duration_seconds: 900 })]);
+    const html = renderReport(buckets, records(), [], GENERATED_AT);
+
+    expect(buckets[15].map((r) => r.id)).toEqual(["short"]);
+    expect(html).toContain(`>15 min <span class="count">1</span>`);
   });
 
   it("labels each tab with its ride count", () => {

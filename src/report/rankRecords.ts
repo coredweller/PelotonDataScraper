@@ -146,7 +146,7 @@ function summarise(rows: CompletedRide[], uniqueRides: number): RideStats {
 /**
  * Turn completed cycling workouts into per-length leaderboards — highest output
  * and most times ridden — plus overall stats. Every workout counts toward the
- * stats; only rides whose length rounds to 20/30/45/60 minutes appear on a
+ * stats; only rides whose length rounds to 15/20/30/45/60 minutes appear on a
  * leaderboard.
  */
 export function rankRecords(rows: CompletedRide[]): RideRecords {
@@ -158,7 +158,7 @@ export function rankRecords(rows: CompletedRide[]): RideRecords {
   }
 
   // Every bucketed ride, before either leaderboard's ordering is applied.
-  const candidates: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
+  const candidates: Record<BucketMinutes, OutputRecord[]> = { 15: [], 20: [], 30: [], 45: [], 60: [] };
 
   for (const workouts of byRide.values()) {
     const record = toOutputRecord(workouts);
@@ -168,8 +168,8 @@ export function rankRecords(rows: CompletedRide[]): RideRecords {
     candidates[minutes].push(record);
   }
 
-  const buckets: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
-  const mostRidden: Record<BucketMinutes, OutputRecord[]> = { 20: [], 30: [], 45: [], 60: [] };
+  const buckets: Record<BucketMinutes, OutputRecord[]> = { 15: [], 20: [], 30: [], 45: [], 60: [] };
+  const mostRidden: Record<BucketMinutes, OutputRecord[]> = { 15: [], 20: [], 30: [], 45: [], 60: [] };
 
   for (const minutes of BUCKET_MINUTES) {
     buckets[minutes] = candidates[minutes].slice().sort(compareByOutput).slice(0, RECORDS_PER_BUCKET);
